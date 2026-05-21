@@ -4,22 +4,70 @@
 -- Created: 2026-05-21
 -- ============================================================================
 
--- Create ENUM types
-CREATE TYPE account_status AS ENUM ('pending', 'active', 'suspended', 'closed');
-CREATE TYPE funding_method AS ENUM ('friendbot', 'createAccount', 'exchange', 'sponsor');
-CREATE TYPE network_type AS ENUM ('testnet', 'mainnet');
-CREATE TYPE transaction_status AS ENUM ('pending_signature', 'signed', 'submitted', 'confirmed', 'failed');
-CREATE TYPE activity_type AS ENUM (
-  'account_created',
-  'trustline_added',
-  'payment_sent',
-  'payment_received',
-  'balance_updated',
-  'minimum_balance_alert',
-  'error'
-);
-CREATE TYPE auth_provider_type AS ENUM ('sep10', 'email');
-CREATE TYPE funding_status_type AS ENUM ('pending', 'completed', 'failed');
+-- Create ENUM types (idempotent for partially-initialized databases)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'account_status') THEN
+    CREATE TYPE account_status AS ENUM ('pending', 'active', 'suspended', 'closed');
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'funding_method') THEN
+    CREATE TYPE funding_method AS ENUM ('friendbot', 'createAccount', 'exchange', 'sponsor');
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'network_type') THEN
+    CREATE TYPE network_type AS ENUM ('testnet', 'mainnet');
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'transaction_status') THEN
+    CREATE TYPE transaction_status AS ENUM ('pending_signature', 'signed', 'submitted', 'confirmed', 'failed');
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'activity_type') THEN
+    CREATE TYPE activity_type AS ENUM (
+      'account_created',
+      'trustline_added',
+      'payment_sent',
+      'payment_received',
+      'balance_updated',
+      'minimum_balance_alert',
+      'error'
+    );
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'auth_provider_type') THEN
+    CREATE TYPE auth_provider_type AS ENUM ('sep10', 'email');
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'funding_status_type') THEN
+    CREATE TYPE funding_status_type AS ENUM ('pending', 'completed', 'failed');
+  END IF;
+END
+$$;
 
 -- ============================================================================
 -- TABLE: users
@@ -52,7 +100,7 @@ CREATE TABLE users (
   -- Constraints
   CONSTRAINT valid_email CHECK (email ~ '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}$'),
   CONSTRAINT valid_username CHECK (username ~ '^[a-zA-Z0-9_-]{3,30}$'),
-  CONSTRAINT valid_stellar_public_key CHECK (stellar_public_key ~ '^G[A-Z2-7]{56}$'),
+  CONSTRAINT valid_stellar_public_key CHECK (stellar_public_key ~ '^G[A-Z2-7]{55}$'),
   CONSTRAINT valid_minimum_balance CHECK (minimum_balance_xlm >= 1.0)
 );
 
@@ -96,7 +144,7 @@ CREATE TABLE stellar_accounts (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 
   -- Constraints
-  CONSTRAINT valid_stellar_public_key CHECK (public_key ~ '^G[A-Z2-7]{56}$'),
+  CONSTRAINT valid_stellar_public_key CHECK (public_key ~ '^G[A-Z2-7]{55}$'),
   CONSTRAINT valid_balance CHECK (balance_native >= 0),
   CONSTRAINT valid_sequence CHECK (sequence_number IS NULL OR sequence_number >= 0),
   CONSTRAINT valid_trustlines CHECK (num_trustlines >= 0),
@@ -115,6 +163,7 @@ CREATE INDEX idx_stellar_accounts_created_at ON stellar_accounts(created_at DESC
 -- ============================================================================
 CREATE TABLE trustlines (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   stellar_account_id UUID NOT NULL REFERENCES stellar_accounts(id) ON DELETE CASCADE,
   asset_code VARCHAR(12) NOT NULL,
   asset_issuer VARCHAR(56) NOT NULL,
@@ -134,12 +183,13 @@ CREATE TABLE trustlines (
   CONSTRAINT valid_balance CHECK (balance >= 0),
   CONSTRAINT valid_limit CHECK (limit_amount IS NULL OR limit_amount > 0),
   CONSTRAINT valid_asset_code CHECK (asset_code ~ '^[A-Z0-9]{1,12}$'),
-  CONSTRAINT valid_asset_issuer CHECK (asset_issuer ~ '^G[A-Z2-7]{56}$'),
+  CONSTRAINT valid_asset_issuer CHECK (asset_issuer ~ '^G[A-Z2-7]{55}$'),
 
   UNIQUE(stellar_account_id, asset_code, asset_issuer)
 );
 
 -- Indexes for trustlines table
+CREATE INDEX idx_trustlines_user_id ON trustlines(user_id);
 CREATE INDEX idx_trustlines_account_id ON trustlines(stellar_account_id);
 CREATE INDEX idx_trustlines_asset ON trustlines(asset_code, asset_issuer);
 CREATE INDEX idx_trustlines_created_at ON trustlines(created_at DESC);
@@ -150,6 +200,7 @@ CREATE INDEX idx_trustlines_created_at ON trustlines(created_at DESC);
 -- ============================================================================
 CREATE TABLE transactions_signed (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   stellar_account_id UUID NOT NULL REFERENCES stellar_accounts(id) ON DELETE CASCADE,
 
   -- Transaction Details
@@ -180,10 +231,11 @@ CREATE TABLE transactions_signed (
   -- Constraints
   CONSTRAINT valid_operation_type CHECK (operation_type IN ('createAccount', 'payment', 'changeTrust', 'manageOffer', 'pathPayment')),
   CONSTRAINT valid_amount CHECK (amount_xlm IS NULL OR amount_xlm > 0),
-  CONSTRAINT valid_destination CHECK (destination_account IS NULL OR destination_account ~ '^G[A-Z2-7]{56}$')
+  CONSTRAINT valid_destination CHECK (destination_account IS NULL OR destination_account ~ '^G[A-Z2-7]{55}$')
 );
 
 -- Indexes for transactions_signed table
+CREATE INDEX idx_transactions_user_id ON transactions_signed(user_id);
 CREATE INDEX idx_transactions_account_id ON transactions_signed(stellar_account_id);
 CREATE INDEX idx_transactions_status ON transactions_signed(status);
 CREATE INDEX idx_transactions_hash ON transactions_signed(txn_hash);
@@ -217,7 +269,7 @@ CREATE TABLE account_funding_log (
 
   -- Constraints
   CONSTRAINT valid_amount CHECK (amount_xlm > 0),
-  CONSTRAINT valid_source_account CHECK (funding_source_account IS NULL OR funding_source_account ~ '^G[A-Z2-7]{56}$')
+  CONSTRAINT valid_source_account CHECK (funding_source_account IS NULL OR funding_source_account ~ '^G[A-Z2-7]{55}$')
 );
 
 -- Indexes for account_funding_log table
@@ -297,9 +349,7 @@ CREATE POLICY "Anyone can insert accounts"
 CREATE POLICY "Users can view their own trustlines"
   ON trustlines FOR SELECT
   USING (
-    stellar_account_id IN (
-      SELECT id FROM stellar_accounts WHERE user_id = auth.uid()::uuid
-    )
+    user_id = auth.uid()::uuid
   );
 
 CREATE POLICY "Service role can manage trustlines"
@@ -314,9 +364,7 @@ CREATE POLICY "Anyone can insert trustlines"
 CREATE POLICY "Users can view their own transactions"
   ON transactions_signed FOR SELECT
   USING (
-    stellar_account_id IN (
-      SELECT id FROM stellar_accounts WHERE user_id = auth.uid()::uuid
-    )
+    user_id = auth.uid()::uuid
   );
 
 CREATE POLICY "Service role can manage transactions"

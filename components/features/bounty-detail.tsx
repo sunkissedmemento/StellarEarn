@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -9,12 +10,79 @@ import { CheckBadgeIcon, ChatBubbleLeftIcon, CheckCircleIcon } from "@heroicons/
 import { ArrowLeftIcon, ArrowRightIcon } from "@heroicons/react/24/outline";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { readAuthSession } from "@/lib/auth-session";
 
 interface BountyDetailProps {
   bounty: Bounty;
 }
 
 export function BountyDetail({ bounty }: BountyDetailProps) {
+  const [submissionUrl, setSubmissionUrl] = useState("");
+  const [workerName, setWorkerName] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const rewardAmount = bounty.rewardAmount ?? bounty.prize;
+  const rewardUnit = bounty.rewardUnit ?? "PHP";
+  const status = bounty.status ?? "open";
+  const isDatabaseGig = typeof bounty.id === "string";
+
+  const statusLabel =
+    status === "pending_review"
+      ? "Pending Review"
+      : status === "closed"
+        ? "Closed"
+        : "Open";
+
+  const submitWork = async () => {
+    const session = readAuthSession();
+
+    if (!session?.userId) {
+      toast.error("Please log in before submitting work");
+      return;
+    }
+
+    if (!submissionUrl.trim()) {
+      toast.error("Please provide a submission link");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`/api/gigs/${bounty.slug}/submit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          worker_user_id: session.userId,
+          worker_name: workerName || undefined,
+          submission_url: submissionUrl,
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        const details = Array.isArray(payload?.details)
+          ? payload.details.map((item: { message?: string }) => item.message).filter(Boolean).join(", ")
+          : "";
+        throw new Error(details || payload?.error || "Submission failed");
+      }
+
+      toast.success("Work submitted", {
+        description: "Gig status is now Pending Review",
+      });
+
+      setSubmissionUrl("");
+      window.location.reload();
+    } catch (error) {
+      toast.error("Could not submit work", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-5xl p-6">
       <Link
@@ -66,10 +134,10 @@ export function BountyDetail({ bounty }: BountyDetailProps) {
               </span>
             )}
           </div>
-          
+
           <p className="mb-3 block text-[10.5px] font-bold uppercase tracking-[0.1em] text-stellar-navy dark:text-stellar-lavender">About this bounty</p>
           <p className="mb-6 text-[13.5px] leading-[1.7] text-stellar-black/85 dark:text-stellar-white/85">{bounty.desc}</p>
-          
+
           <p className="mb-3 block text-[10.5px] font-bold uppercase tracking-[0.1em] text-stellar-navy dark:text-stellar-lavender">Deliverables</p>
           <ul className="m-0 list-none p-0 space-y-1">
             {bounty.deliverables.map((d, i) => (
@@ -80,38 +148,58 @@ export function BountyDetail({ bounty }: BountyDetailProps) {
             ))}
           </ul>
         </div>
-        
+
         <div>
           <Card className="group relative overflow-hidden mb-3 p-5 shadow-[0_4px_20px_rgba(15,15,15,0.02)] border border-stellar-gray/20 dark:border-stellar-gray/10 bg-white/70 dark:bg-[#151515]/70 backdrop-blur-md">
 
             <div className="relative z-10 pt-2 pb-1.5 text-center text-[30px] font-bold text-stellar-teal tracking-tight">
-              ₱{bounty.prize.toLocaleString()}
+              {rewardAmount.toLocaleString()} {rewardUnit}
             </div>
             <div className="relative z-10 mb-4 text-center text-[10.5px] font-medium tracking-wide text-stellar-navy/60 dark:text-stellar-lavender/60">
-              Prize · locked in Soroban escrow
+              Reward set by sponsor
             </div>
             {[
               ["Submission fee", bounty.fee],
               ["Submissions", String(bounty.submissions)],
               ["Deadline", bounty.deadline],
-              ["Escrow status", <div key="escrow" className="flex items-center gap-1 text-emerald-500 font-semibold">Locked <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-500 animate-pulse" /></div>],
+              ["Status", <div key="status" className="flex items-center gap-1 text-emerald-500 font-semibold">{statusLabel} <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-500 animate-pulse" /></div>],
             ].map(([l, v], idx, arr) => (
               <div key={idx} className={`relative z-10 flex justify-between items-center py-2 text-[12px] ${idx !== arr.length - 1 ? "border-b border-stellar-gray/15 dark:border-stellar-gray/10" : ""}`}>
                 <span className="text-muted-foreground dark:text-stellar-gray/70 font-medium">{l as string}</span>
                 <span className={`font-semibold ${l === "Escrow status" ? "" : "text-stellar-black dark:text-stellar-white"}`}>{v}</span>
               </div>
             ))}
-            <Button
-              className="relative z-10 mt-4 w-full bg-stellar-yellow text-[13px] font-bold text-stellar-black border border-stellar-yellow hover:bg-stellar-yellow/95 hover:shadow-[0_2px_12px_rgba(253,218,36,0.3)] active:scale-[0.98] transition-all duration-200 cursor-pointer py-5"
-              onClick={() => toast.success("Submission fee paid · Work submitted")}
-            >
-              Pay fee &amp; submit
-            </Button>
+            <div className="relative z-10 mt-4 space-y-2">
+              <input
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                placeholder="Your name (optional)"
+                value={workerName}
+                onChange={(e) => setWorkerName(e.target.value)}
+              />
+              <input
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                placeholder="Google Doc or GitHub repo link"
+                value={submissionUrl}
+                onChange={(e) => setSubmissionUrl(e.target.value)}
+              />
+              <Button
+                className="w-full bg-stellar-yellow text-[13px] font-bold text-stellar-black border border-stellar-yellow hover:bg-stellar-yellow/95 hover:shadow-[0_2px_12px_rgba(253,218,36,0.3)] active:scale-[0.98] transition-all duration-200 cursor-pointer py-5"
+                onClick={submitWork}
+                disabled={isSubmitting || !isDatabaseGig}
+              >
+                {isSubmitting ? "Submitting..." : "Submit Work"}
+              </Button>
+            </div>
             <p className="relative z-10 mt-3 text-center text-[10px] leading-[1.5] text-stellar-black/50 dark:text-stellar-gray/60 font-medium">
-              Winners get their {bounty.fee} fee back plus the full prize. Losing fees fund the platform.
+              Submit a Google Doc or GitHub repository. New submissions are saved in the database with Pending Review status.
             </p>
+            {!isDatabaseGig && (
+              <p className="relative z-10 mt-2 text-center text-[10px] leading-[1.5] text-stellar-black/50 dark:text-stellar-gray/60 font-medium">
+                Submission saving is enabled for sponsor-created gigs.
+              </p>
+            )}
           </Card>
-          
+
           <Card className="group relative overflow-hidden p-5 shadow-[0_4px_20px_rgba(15,15,15,0.02)] border border-stellar-gray/20 dark:border-stellar-gray/10 bg-white/70 dark:bg-[#151515]/70 backdrop-blur-md">
             <p className="relative z-10 mb-3 text-[10px] font-bold uppercase tracking-[0.1em] text-stellar-navy dark:text-stellar-lavender">Posted by</p>
             <div className="relative z-10 flex items-center gap-2.5">

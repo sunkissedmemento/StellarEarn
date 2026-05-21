@@ -16,10 +16,12 @@ export async function POST(req: Request) {
       return Response.json(
         {
           error: 'Validation failed',
-          details: parsed.error.errors.map((e) => ({
-            field: e.path.join('.'),
-            message: e.message,
-          })),
+          details: Array.isArray(parsed.error?.issues)
+            ? parsed.error.issues.map((e) => ({
+                field: Array.isArray(e.path) ? e.path.join('.') : '',
+                message: e.message,
+              }))
+            : [],
         },
         { status: 400 }
       );
@@ -91,10 +93,17 @@ export async function POST(req: Request) {
     );
   } catch (error) {
     console.error('Registration error:', error);
+    const details =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'object' && error !== null && 'message' in error
+          ? String((error as { message: unknown }).message)
+          : 'Unknown error';
+
     return Response.json(
       {
         error: 'Registration failed',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        details,
       },
       { status: 500 }
     );

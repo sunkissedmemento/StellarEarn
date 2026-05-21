@@ -64,6 +64,7 @@ export type Database = {
       trustlines: {
         Row: {
           id: string;
+          user_id: string;
           stellar_account_id: string;
           asset_code: string;
           asset_issuer: string;
@@ -80,6 +81,13 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['trustlines']['Insert']>;
         Relationships: [
           {
+            foreignKeyName: 'trustlines_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+          {
             foreignKeyName: 'trustlines_stellar_account_id_fkey';
             columns: ['stellar_account_id'];
             isOneToOne: false;
@@ -91,6 +99,7 @@ export type Database = {
       transactions_signed: {
         Row: {
           id: string;
+          user_id: string;
           stellar_account_id: string;
           txn_xdr: string;
           txn_hash: string | null;
@@ -112,6 +121,13 @@ export type Database = {
         >;
         Update: Partial<Database['public']['Tables']['transactions_signed']['Insert']>;
         Relationships: [
+          {
+            foreignKeyName: 'transactions_signed_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
           {
             foreignKeyName: 'transactions_signed_stellar_account_id_fkey';
             columns: ['stellar_account_id'];
@@ -187,6 +203,81 @@ export type Database = {
             columns: ['stellar_account_id'];
             isOneToOne: false;
             referencedRelation: 'stellar_accounts';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      gigs: {
+        Row: {
+          id: string;
+          created_by_user_id: string;
+          slug: string;
+          title: string;
+          org: string;
+          initials: string;
+          prize_php: number;
+          reward_amount: number;
+          reward_unit: 'XLM' | 'PHP' | 'USDC';
+          type: 'bounty' | 'project';
+          skill: 'content' | 'design' | 'dev' | 'research';
+          status: 'open' | 'pending_review' | 'closed';
+          deadline_at: string;
+          description: string;
+          deliverables: string[];
+          sponsor_name: string | null;
+          sponsor_wallet: string | null;
+          live: boolean;
+          featured: boolean;
+          submissions: number;
+          fee_xlm: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['gigs']['Row'],
+          'id' | 'created_at' | 'updated_at'
+        >;
+        Update: Partial<Database['public']['Tables']['gigs']['Insert']>;
+        Relationships: [
+          {
+            foreignKeyName: 'gigs_created_by_user_id_fkey';
+            columns: ['created_by_user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      gig_submissions: {
+        Row: {
+          id: string;
+          gig_id: string;
+          worker_user_id: string;
+          worker_name: string | null;
+          submission_url: string;
+          status: 'pending_review' | 'approved' | 'rejected';
+          submitted_at: string;
+          reviewed_at: string | null;
+          notes: string | null;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['gig_submissions']['Row'],
+          'id' | 'submitted_at'
+        >;
+        Update: Partial<Database['public']['Tables']['gig_submissions']['Insert']>;
+        Relationships: [
+          {
+            foreignKeyName: 'gig_submissions_gig_id_fkey';
+            columns: ['gig_id'];
+            isOneToOne: false;
+            referencedRelation: 'gigs';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'gig_submissions_worker_user_id_fkey';
+            columns: ['worker_user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
             referencedColumns: ['id'];
           }
         ];

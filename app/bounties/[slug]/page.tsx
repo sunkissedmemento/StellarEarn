@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { BOUNTIES } from "@/lib/data";
+import { getGigBySlug } from "@/lib/gigs";
 import { BountyDetail } from "@/components/features/bounty-detail";
 
 interface BountyPageProps {
@@ -20,7 +21,8 @@ export async function generateStaticParams() {
  */
 export default async function BountyPage({ params }: BountyPageProps) {
   const { slug } = await params;
-  const bounty = BOUNTIES.find((b) => b.slug === slug && b.type === "bounty");
+  const staticBounty = BOUNTIES.find((b) => b.slug === slug && b.type === "bounty");
+  const bounty = staticBounty ?? (await getGigBySlug(slug, "bounty"));
 
   if (!bounty) {
     notFound();

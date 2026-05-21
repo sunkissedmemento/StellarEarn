@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, Suspense } from "react";
+import { useState, useCallback, Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 
 import { BOUNTIES, GRANTS, EARNERS, ACTIVITIES } from "@/lib/data";
-import type { Tab, Skill } from "@/lib/data";
+import type { Tab, Skill, Bounty } from "@/lib/data";
 import { BountyListItem } from "@/components/features/bounty-list-item";
 import { InfiniteCarousel } from "@/components/features/infinite-carousel";
 import { EarnerRow } from "@/components/features/earner-card";
@@ -37,6 +37,43 @@ function StellarEarnDashboard() {
 
   // State for Grants category filter (keeping it local as it's separate)
   const [activeGrantSkill, setActiveGrantSkill] = useState<string>("All");
+  const [createdGigs, setCreatedGigs] = useState<Bounty[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadGigs = async () => {
+      try {
+        const response = await fetch("/api/gigs", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json()) as { gigs?: Bounty[] };
+        if (isMounted && Array.isArray(payload.gigs)) {
+          setCreatedGigs(payload.gigs);
+        }
+      } catch {
+        // Keep dashboard usable with static fallback data.
+      }
+    };
+
+    const handleGigCreated = (event: Event) => {
+      const customEvent = event as CustomEvent<Bounty>;
+      const gig = customEvent.detail;
+      if (!gig) return;
+
+      setCreatedGigs((prev) => {
+        const deduped = prev.filter((item) => item.id !== gig.id);
+        return [gig, ...deduped];
+      });
+    };
+
+    loadGigs();
+    window.addEventListener("gig-created", handleGigCreated);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener("gig-created", handleGigCreated);
+    };
+  }, []);
 
   const createQueryString = useCallback(
     (name: string, value: string) => {
@@ -62,9 +99,10 @@ function StellarEarnDashboard() {
   };
 
   const handleSurpriseMe = () => {
-    if (BOUNTIES.length === 0) return;
-    const randomIndex = Math.floor(Math.random() * BOUNTIES.length);
-    const randomItem = BOUNTIES[randomIndex];
+    const allGigs = [...createdGigs, ...BOUNTIES];
+    if (allGigs.length === 0) return;
+    const randomIndex = Math.floor(Math.random() * allGigs.length);
+    const randomItem = allGigs[randomIndex];
     router.push(randomItem.type === "bounty" ? `/bounties/${randomItem.slug}` : `/projects/${randomItem.slug}`);
   };
 
@@ -73,7 +111,9 @@ function StellarEarnDashboard() {
     window.dispatchEvent(event);
   };
 
-  const filteredBounties = BOUNTIES.filter((b) => {
+  const allGigs = [...createdGigs, ...BOUNTIES];
+
+  const filteredBounties = allGigs.filter((b) => {
     const tabOk =
       activeTab === "all" ||
       (activeTab === "bounties" && b.type === "bounty") ||
@@ -87,8 +127,8 @@ function StellarEarnDashboard() {
       {/* ── Hero ── */}
       <div className="relative flex min-h-[180px] items-center justify-between overflow-hidden bg-stellar-cosmic px-[8vw] py-8 rounded-2xl mb-6 border border-white/15 shadow-xl mx-[1vw] my-[1vh] hover:shadow-2xl transition-all duration-300">
         {/* Premium Unsplash cosmic network overlay with 50% transparency */}
-        <div 
-          className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80')] bg-cover bg-center opacity-50 mix-blend-overlay pointer-events-none" 
+        <div
+          className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80')] bg-cover bg-center opacity-50 mix-blend-overlay pointer-events-none"
         />
         {/* Layered textures inside Hero */}
         <div className="absolute inset-0 bg-stellar-noise-direct opacity-[0.015] pointer-events-none" />
@@ -100,7 +140,7 @@ function StellarEarnDashboard() {
             {"Claim high-value opportunities and fast-track your skills. Whether you're a designer, builder, Web2 developer, Web3 pioneer, or a tech enthusiast—start showcase-building and earning native rewards directly to your wallet."}
           </p>
           <div className="flex items-center gap-4">
-            <Button 
+            <Button
               onClick={handleSignUpClick}
               className="h-9 bg-stellar-white text-[13px] font-semibold text-stellar-black hover:bg-white hover:-translate-y-[1px] hover:shadow-md cursor-pointer transition-all duration-200"
             >
@@ -278,7 +318,7 @@ function StellarEarnDashboard() {
               <div className="mb-3 text-[11px] leading-relaxed text-muted-foreground">
                 Your gateway to native Stellar bounties and grants. Build high-impact solutions, earn PHP rewards directly to your wallet, and grow the ecosystem.
               </div>
-              <Button 
+              <Button
                 onClick={handleSurpriseMe}
                 className="h-8 w-full bg-stellar-yellow text-xs font-semibold text-stellar-black hover:bg-stellar-yellow/90 hover:-translate-y-[0.5px] hover:shadow-sm cursor-pointer transition-all duration-200"
               >

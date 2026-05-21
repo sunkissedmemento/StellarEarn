@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { StrKey } from '@stellar/stellar-sdk';
 import type { Database } from './database.types';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -31,7 +32,8 @@ export function createServerSupabaseClient() {
   if (!supabaseServiceRoleKey) {
     throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY environment variable (server-side operations only)');
   }
-  return createClient<Database>(supabaseUrl, supabaseServiceRoleKey, {
+  const serviceRoleKey = supabaseServiceRoleKey;
+  return createClient<Database>(supabaseUrl, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
@@ -41,5 +43,5 @@ export function createServerSupabaseClient() {
 
 // Validate Stellar public key format
 export function isValidStellarPublicKey(publicKey: string): boolean {
-  return /^G[A-Z2-7]{56}$/.test(publicKey);
+  return StrKey.isValidEd25519PublicKey(publicKey);
 }

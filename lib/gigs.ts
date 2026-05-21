@@ -3,6 +3,7 @@ import type { Bounty, OpportunitySkill, OpportunityType } from '@/lib/data';
 
 type GigRow = {
   id: string;
+  created_by_user_id: string;
   slug: string;
   title: string;
   org: string;
@@ -12,7 +13,7 @@ type GigRow = {
   reward_unit: "XLM" | "PHP" | "USDC";
   type: OpportunityType;
   skill: OpportunitySkill;
-  status: "open" | "pending_review" | "closed";
+  status: "open" | "pending_review" | "closed" | "paid";
   deadline_at: string;
   description: string;
   deliverables: string[];
@@ -20,6 +21,8 @@ type GigRow = {
   live: boolean;
   submissions: number;
   fee_xlm: number;
+  paid_at: string | null;
+  payment_tx_hash: string | null;
   created_at: string;
 };
 
@@ -75,6 +78,9 @@ export function mapGigToBounty(gig: GigRow): Bounty {
     due: dueLabel(gig.deadline_at),
     submissions: gig.submissions,
     fee: `${gig.fee_xlm} XLM`,
+    createdByUserId: gig.created_by_user_id,
+    paidAt: gig.paid_at,
+    paymentTxHash: gig.payment_tx_hash,
     featured: gig.featured,
     live: gig.live,
     desc: gig.description,

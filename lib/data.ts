@@ -18,9 +18,12 @@ export interface Bounty {
   due: string;
   submissions: number;
   fee: string;
+  createdByUserId?: string;
+  paidAt?: string | null;
+  paymentTxHash?: string | null;
   rewardAmount?: number;
   rewardUnit?: "XLM" | "PHP" | "USDC";
-  status?: "open" | "pending_review" | "closed";
+  status?: "open" | "pending_review" | "closed" | "paid";
   featured: boolean;
   live: boolean;
   desc: string;

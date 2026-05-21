@@ -220,7 +220,7 @@ export type Database = {
           reward_unit: 'XLM' | 'PHP' | 'USDC';
           type: 'bounty' | 'project';
           skill: 'content' | 'design' | 'dev' | 'research';
-          status: 'open' | 'pending_review' | 'closed';
+          status: 'open' | 'pending_review' | 'closed' | 'paid';
           deadline_at: string;
           description: string;
           deliverables: string[];
@@ -230,6 +230,9 @@ export type Database = {
           featured: boolean;
           submissions: number;
           fee_xlm: number;
+          paid_by_user_id: string | null;
+          paid_at: string | null;
+          payment_tx_hash: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -245,6 +248,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'users';
             referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'gigs_paid_by_user_id_fkey';
+            columns: ['paid_by_user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
           }
         ];
       };
@@ -257,6 +267,9 @@ export type Database = {
           submission_url: string;
           status: 'pending_review' | 'approved' | 'rejected';
           submitted_at: string;
+          approved_by_user_id: string | null;
+          approved_at: string | null;
+          payout_tx_hash: string | null;
           reviewed_at: string | null;
           notes: string | null;
         };
@@ -276,6 +289,13 @@ export type Database = {
           {
             foreignKeyName: 'gig_submissions_worker_user_id_fkey';
             columns: ['worker_user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'gig_submissions_approved_by_user_id_fkey';
+            columns: ['approved_by_user_id'];
             isOneToOne: false;
             referencedRelation: 'users';
             referencedColumns: ['id'];

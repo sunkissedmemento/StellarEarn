@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import * as StellarSdk from "@stellar/stellar-sdk";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -16,15 +17,86 @@ interface BountyDetailProps {
   bounty: Bounty;
 }
 
+type GigSubmission = {
+  id: string;
+  worker_user_id: string;
+  worker_name: string | null;
+  worker_username: string | null;
+  worker_stellar_public_key: string | null;
+  submission_url: string;
+  status: "pending_review" | "approved" | "rejected";
+  submitted_at: string;
+  approved_at: string | null;
+  payout_tx_hash: string | null;
+};
+
 export function BountyDetail({ bounty }: BountyDetailProps) {
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [authWalletAddress, setAuthWalletAddress] = useState<string | null>(null);
   const [submissionUrl, setSubmissionUrl] = useState("");
   const [workerName, setWorkerName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isApproving, setIsApproving] = useState<string | null>(null);
+  const [submissions, setSubmissions] = useState<GigSubmission[]>([]);
+  const [isLoadingSubmissions, setIsLoadingSubmissions] = useState(false);
 
   const rewardAmount = bounty.rewardAmount ?? bounty.prize;
   const rewardUnit = bounty.rewardUnit ?? "PHP";
   const status = bounty.status ?? "open";
   const isDatabaseGig = typeof bounty.id === "string";
+  const canReviewAndPay = Boolean(
+    isDatabaseGig &&
+    authUserId &&
+    bounty.createdByUserId &&
+    authUserId === bounty.createdByUserId
+  );
+  const pendingSubmissions = useMemo(
+    () => submissions.filter((item) => item.status === "pending_review"),
+    [submissions]
+  );
+
+  const networkPassphrase =
+    process.env.NEXT_PUBLIC_STELLAR_NETWORK === "mainnet"
+      ? StellarSdk.Networks.PUBLIC
+      : StellarSdk.Networks.TESTNET;
+  const horizonUrl =
+    process.env.NEXT_PUBLIC_STELLAR_NETWORK === "mainnet"
+      ? "https://horizon.stellar.org"
+      : "https://horizon-testnet.stellar.org";
+
+  useEffect(() => {
+    const session = readAuthSession();
+    setAuthUserId(session?.userId ?? null);
+    setAuthWalletAddress(session?.walletAddress ?? null);
+  }, []);
+
+  useEffect(() => {
+    if (!isDatabaseGig) return;
+
+    const loadSubmissions = async () => {
+      setIsLoadingSubmissions(true);
+      try {
+        const response = await fetch(`/api/gigs/${bounty.slug}/submissions`, {
+          cache: "no-store",
+        });
+
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.error || "Failed to load submissions");
+        }
+
+        setSubmissions(Array.isArray(payload?.submissions) ? payload.submissions : []);
+      } catch (error) {
+        toast.error("Could not load submissions", {
+          description: error instanceof Error ? error.message : "Please refresh and try again.",
+        });
+      } finally {
+        setIsLoadingSubmissions(false);
+      }
+    };
+
+    void loadSubmissions();
+  }, [bounty.slug, isDatabaseGig]);
 
   const statusLabel =
     status === "pending_review"
@@ -80,6 +152,105 @@ export function BountyDetail({ bounty }: BountyDetailProps) {
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const approveAndPay = async (submission: GigSubmission) => {
+    if (!authUserId) {
+      toast.error("Please log in as the sponsor to approve payment");
+      return;
+    }
+
+    if (!authWalletAddress) {
+      toast.error("Connect a wallet before approving payment");
+      return;
+    }
+
+    if (!submission.worker_stellar_public_key) {
+      toast.error("Worker wallet address is missing");
+      return;
+    }
+
+    if (rewardUnit !== "XLM") {
+      toast.error("MVP payout currently supports XLM only");
+      return;
+    }
+
+    const freighterApi = (window as Window & {
+      freighterApi?: {
+        signTransaction: (xdr: string, options: { networkPassphrase: string }) => Promise<string | { signedTxXdr?: string; xdr?: string }>;
+      };
+    }).freighterApi;
+
+    if (!freighterApi?.signTransaction) {
+      toast.error("Freighter wallet not detected");
+      return;
+    }
+
+    setIsApproving(submission.id);
+
+    try {
+      const server = new StellarSdk.Horizon.Server(horizonUrl);
+      const sourceAccount = await server.loadAccount(authWalletAddress);
+
+      const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
+        fee: StellarSdk.BASE_FEE,
+        networkPassphrase,
+      })
+        .addOperation(
+          StellarSdk.Operation.payment({
+            destination: submission.worker_stellar_public_key,
+            asset: StellarSdk.Asset.native(),
+            amount: Number(rewardAmount).toFixed(7),
+          })
+        )
+        .setTimeout(120)
+        .build();
+
+      const signed = await freighterApi.signTransaction(tx.toXDR(), {
+        networkPassphrase,
+      });
+
+      const signedXdr =
+        typeof signed === "string"
+          ? signed
+          : signed?.signedTxXdr ?? signed?.xdr;
+
+      if (!signedXdr) {
+        throw new Error("Freighter did not return a signed transaction");
+      }
+
+      const signedTx = StellarSdk.TransactionBuilder.fromXDR(signedXdr, networkPassphrase);
+      const result = await server.submitTransaction(signedTx);
+
+      const finalizeResponse = await fetch(`/api/gigs/${bounty.slug}/approve-pay`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          submission_id: submission.id,
+          sponsor_user_id: authUserId,
+          tx_hash: result.hash,
+        }),
+      });
+
+      const finalizePayload = await finalizeResponse.json().catch(() => null);
+      if (!finalizeResponse.ok) {
+        throw new Error(finalizePayload?.error || "Failed to finalize payment");
+      }
+
+      toast.success("Approved and paid", {
+        description: `Transaction hash: ${result.hash}`,
+      });
+
+      window.location.reload();
+    } catch (error) {
+      toast.error("Approve & Pay failed", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setIsApproving(null);
     }
   };
 
@@ -199,6 +370,44 @@ export function BountyDetail({ bounty }: BountyDetailProps) {
               </p>
             )}
           </Card>
+
+          {canReviewAndPay && (
+            <Card className="group relative overflow-hidden p-5 shadow-[0_4px_20px_rgba(15,15,15,0.02)] border border-stellar-gray/20 dark:border-stellar-gray/10 bg-white/70 dark:bg-[#151515]/70 backdrop-blur-md">
+              <p className="relative z-10 mb-3 text-[10px] font-bold uppercase tracking-[0.1em] text-stellar-navy dark:text-stellar-lavender">
+                Sponsor Review
+              </p>
+              {isLoadingSubmissions ? (
+                <p className="text-xs text-muted-foreground">Loading submissions...</p>
+              ) : pendingSubmissions.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No pending submissions to review.</p>
+              ) : (
+                <div className="space-y-2">
+                  {pendingSubmissions.map((submission) => (
+                    <div key={submission.id} className="rounded-md border border-border p-2.5">
+                      <p className="text-[11px] font-semibold text-foreground">
+                        {submission.worker_username ?? submission.worker_name ?? "Unknown worker"}
+                      </p>
+                      <a
+                        href={submission.submission_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 block break-all text-[10px] text-stellar-teal hover:underline"
+                      >
+                        {submission.submission_url}
+                      </a>
+                      <Button
+                        className="mt-2 h-8 w-full bg-stellar-yellow text-[11px] font-bold text-stellar-black hover:bg-stellar-yellow/90"
+                        onClick={() => approveAndPay(submission)}
+                        disabled={Boolean(isApproving)}
+                      >
+                        {isApproving === submission.id ? "Processing..." : `Approve & Pay ${rewardAmount} ${rewardUnit}`}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
 
           <Card className="group relative overflow-hidden p-5 shadow-[0_4px_20px_rgba(15,15,15,0.02)] border border-stellar-gray/20 dark:border-stellar-gray/10 bg-white/70 dark:bg-[#151515]/70 backdrop-blur-md">
             <p className="relative z-10 mb-3 text-[10px] font-bold uppercase tracking-[0.1em] text-stellar-navy dark:text-stellar-lavender">Posted by</p>

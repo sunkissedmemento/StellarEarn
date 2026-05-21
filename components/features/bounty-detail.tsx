@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import * as StellarSdk from "@stellar/stellar-sdk";
+import { getAddress, isConnected, requestAccess, signTransaction } from "@stellar/freighter-api";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -11,7 +12,7 @@ import { CheckBadgeIcon, ChatBubbleLeftIcon, CheckCircleIcon } from "@heroicons/
 import { ArrowLeftIcon, ArrowRightIcon } from "@heroicons/react/24/outline";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { readAuthSession } from "@/lib/auth-session";
+import { readAuthSession, writeAuthSession } from "@/lib/auth-session";
 
 interface BountyDetailProps {
   bounty: Bounty;
@@ -31,20 +32,29 @@ type GigSubmission = {
 };
 
 export function BountyDetail({ bounty }: BountyDetailProps) {
-  const [authUserId, setAuthUserId] = useState<string | null>(null);
-  const [authWalletAddress, setAuthWalletAddress] = useState<string | null>(null);
+  const isHydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+  const [authUserId] = useState<string | null>(() => readAuthSession()?.userId ?? null);
+  const [authWalletAddress, setAuthWalletAddress] = useState<string | null>(() => readAuthSession()?.walletAddress ?? null);
   const [submissionUrl, setSubmissionUrl] = useState("");
   const [workerName, setWorkerName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isApproving, setIsApproving] = useState<string | null>(null);
   const [submissions, setSubmissions] = useState<GigSubmission[]>([]);
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState(false);
+  const [isCheckingWallet, setIsCheckingWallet] = useState(false);
+  const [freighterAddress, setFreighterAddress] = useState<string | null>(null);
+  const [walletStatusText, setWalletStatusText] = useState("Not checked");
 
   const rewardAmount = bounty.rewardAmount ?? bounty.prize;
   const rewardUnit = bounty.rewardUnit ?? "PHP";
   const status = bounty.status ?? "open";
   const isDatabaseGig = typeof bounty.id === "string";
   const canReviewAndPay = Boolean(
+    isHydrated &&
     isDatabaseGig &&
     authUserId &&
     bounty.createdByUserId &&
@@ -53,6 +63,9 @@ export function BountyDetail({ bounty }: BountyDetailProps) {
   const pendingSubmissions = useMemo(
     () => submissions.filter((item) => item.status === "pending_review"),
     [submissions]
+  );
+  const walletMismatch = Boolean(
+    authWalletAddress && freighterAddress && authWalletAddress !== freighterAddress
   );
 
   const networkPassphrase =
@@ -63,12 +76,6 @@ export function BountyDetail({ bounty }: BountyDetailProps) {
     process.env.NEXT_PUBLIC_STELLAR_NETWORK === "mainnet"
       ? "https://horizon.stellar.org"
       : "https://horizon-testnet.stellar.org";
-
-  useEffect(() => {
-    const session = readAuthSession();
-    setAuthUserId(session?.userId ?? null);
-    setAuthWalletAddress(session?.walletAddress ?? null);
-  }, []);
 
   useEffect(() => {
     if (!isDatabaseGig) return;
@@ -161,11 +168,6 @@ export function BountyDetail({ bounty }: BountyDetailProps) {
       return;
     }
 
-    if (!authWalletAddress) {
-      toast.error("Connect a wallet before approving payment");
-      return;
-    }
-
     if (!submission.worker_stellar_public_key) {
       toast.error("Worker wallet address is missing");
       return;
@@ -176,22 +178,27 @@ export function BountyDetail({ bounty }: BountyDetailProps) {
       return;
     }
 
-    const freighterApi = (window as Window & {
-      freighterApi?: {
-        signTransaction: (xdr: string, options: { networkPassphrase: string }) => Promise<string | { signedTxXdr?: string; xdr?: string }>;
-      };
-    }).freighterApi;
-
-    if (!freighterApi?.signTransaction) {
-      toast.error("Freighter wallet not detected");
+    const normalizedAmount = Number(rewardAmount);
+    if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+      toast.error("Invalid reward amount");
       return;
     }
 
     setIsApproving(submission.id);
 
     try {
+      const access = await requestAccess();
+      if (access.error) {
+        throw new Error(access.error.message || "Freighter access was not granted");
+      }
+
+      const signerAddress = access.address;
+      if (!signerAddress) {
+        throw new Error("Freighter did not return a wallet address");
+      }
+
       const server = new StellarSdk.Horizon.Server(horizonUrl);
-      const sourceAccount = await server.loadAccount(authWalletAddress);
+      const sourceAccount = await server.loadAccount(signerAddress);
 
       const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
         fee: StellarSdk.BASE_FEE,
@@ -201,20 +208,22 @@ export function BountyDetail({ bounty }: BountyDetailProps) {
           StellarSdk.Operation.payment({
             destination: submission.worker_stellar_public_key,
             asset: StellarSdk.Asset.native(),
-            amount: Number(rewardAmount).toFixed(7),
+            amount: normalizedAmount.toFixed(7),
           })
         )
         .setTimeout(120)
         .build();
 
-      const signed = await freighterApi.signTransaction(tx.toXDR(), {
+      const signed = await signTransaction(tx.toXDR(), {
         networkPassphrase,
+        address: signerAddress,
       });
 
-      const signedXdr =
-        typeof signed === "string"
-          ? signed
-          : signed?.signedTxXdr ?? signed?.xdr;
+      if (signed.error) {
+        throw new Error(signed.error.message || "Freighter could not sign the transaction");
+      }
+
+      const signedXdr = signed.signedTxXdr;
 
       if (!signedXdr) {
         throw new Error("Freighter did not return a signed transaction");
@@ -251,6 +260,41 @@ export function BountyDetail({ bounty }: BountyDetailProps) {
       });
     } finally {
       setIsApproving(null);
+    }
+  };
+
+  const checkWalletStatus = async () => {
+    setIsCheckingWallet(true);
+    try {
+      const connected = await isConnected();
+      if (connected.error || !connected.isConnected) {
+        setFreighterAddress(null);
+        setWalletStatusText("Freighter not connected");
+        return;
+      }
+
+      const addressResult = await getAddress();
+      if (addressResult.error || !addressResult.address) {
+        setFreighterAddress(null);
+        setWalletStatusText(addressResult.error?.message || "Wallet address unavailable");
+        return;
+      }
+
+      setFreighterAddress(addressResult.address);
+
+      if (!authWalletAddress) {
+        setWalletStatusText("Session wallet not set — click \"Use This Wallet\" to link it");
+        return;
+      }
+
+      setWalletStatusText(
+        authWalletAddress === addressResult.address ? "Wallet match" : "Wallet mismatch — click \"Use This Wallet\" to update"
+      );
+    } catch {
+      setFreighterAddress(null);
+      setWalletStatusText("Unable to read Freighter wallet");
+    } finally {
+      setIsCheckingWallet(false);
     }
   };
 
@@ -376,6 +420,52 @@ export function BountyDetail({ bounty }: BountyDetailProps) {
               <p className="relative z-10 mb-3 text-[10px] font-bold uppercase tracking-[0.1em] text-stellar-navy dark:text-stellar-lavender">
                 Sponsor Review
               </p>
+              <div className="mb-3 rounded-md border border-border p-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Wallet Status
+                </p>
+                <p className="mt-1 break-all text-[11px] text-foreground">
+                  Session: {authWalletAddress ?? "Not set"}
+                </p>
+                <p className="mt-1 break-all text-[11px] text-foreground">
+                  Freighter: {freighterAddress ?? "Not checked"}
+                </p>
+                <p
+                  className={cn(
+                    "mt-1 text-[11px] font-semibold",
+                    walletMismatch ? "text-red-500" : "text-emerald-600"
+                  )}
+                >
+                  {walletStatusText}
+                </p>
+                <div className="mt-2 flex gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-7 flex-1 text-[10px]"
+                    onClick={checkWalletStatus}
+                    disabled={isCheckingWallet}
+                  >
+                    {isCheckingWallet ? "Checking..." : "Refresh"}
+                  </Button>
+                  {freighterAddress && freighterAddress !== authWalletAddress && (
+                    <Button
+                      type="button"
+                      className="h-7 flex-1 bg-stellar-teal text-[10px] font-semibold text-white hover:bg-stellar-teal/90"
+                      onClick={() => {
+                        const session = readAuthSession();
+                        if (!session) return;
+                        writeAuthSession({ ...session, walletAddress: freighterAddress, walletConnected: true });
+                        setAuthWalletAddress(freighterAddress);
+                        setWalletStatusText("Wallet match");
+                        toast.success("Session wallet updated");
+                      }}
+                    >
+                      Use This Wallet
+                    </Button>
+                  )}
+                </div>
+              </div>
               {isLoadingSubmissions ? (
                 <p className="text-xs text-muted-foreground">Loading submissions...</p>
               ) : pendingSubmissions.length === 0 ? (
@@ -398,7 +488,7 @@ export function BountyDetail({ bounty }: BountyDetailProps) {
                       <Button
                         className="mt-2 h-8 w-full bg-stellar-yellow text-[11px] font-bold text-stellar-black hover:bg-stellar-yellow/90"
                         onClick={() => approveAndPay(submission)}
-                        disabled={Boolean(isApproving)}
+                        disabled={Boolean(isApproving) || walletMismatch}
                       >
                         {isApproving === submission.id ? "Processing..." : `Approve & Pay ${rewardAmount} ${rewardUnit}`}
                       </Button>

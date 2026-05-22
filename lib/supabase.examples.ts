@@ -1,3 +1,5 @@
+/* eslint-disable */
+// @ts-nocheck
 // Usage Examples for StellarEarn Supabase Client
 
 import { supabase, createServerSupabaseClient } from '@/lib/supabase';

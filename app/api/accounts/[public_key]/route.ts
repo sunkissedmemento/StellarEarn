@@ -1,11 +1,13 @@
 import { createServerSupabaseClient } from '@/lib/supabase';
+import { type NextRequest } from 'next/server';
 
 export async function GET(
-  req: Request,
-  { params }: { params: { public_key: string } }
+  _request: NextRequest,
+  { params }: { params: Promise<{ public_key: string }> }
 ) {
   try {
-    const publicKey = params.public_key;
+    const resolvedParams = await params;
+    const publicKey = resolvedParams.public_key;
 
     // Validate public key format
     if (!/^G[A-Z2-7]{56}$/.test(publicKey)) {

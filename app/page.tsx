@@ -2,18 +2,14 @@
 
 import { useState, useCallback, Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 
-import { BOUNTIES, GRANTS, EARNERS, ACTIVITIES } from "@/lib/data";
+import { BOUNTIES } from "@/lib/data";
 import type { Tab, Skill, Bounty } from "@/lib/data";
 import { BountyListItem } from "@/components/features/bounty-list-item";
-import { InfiniteCarousel } from "@/components/features/infinite-carousel";
-import { EarnerRow } from "@/components/features/earner-card";
-import { ActivityRow } from "@/components/features/activity-card";
 
 import {
   isConnected,
@@ -21,19 +17,8 @@ import {
 } from "@stellar/freighter-api";
 
 import {
-  AdjustmentsHorizontalIcon,
-  BanknotesIcon,
-  ClipboardDocumentListIcon,
-  SparklesIcon,
-  UserIcon,
-  BoltIcon,
-  CurrencyDollarIcon,
-  DevicePhoneMobileIcon,
-  CheckBadgeIcon,
-  ArrowRightIcon
+  AdjustmentsHorizontalIcon
 } from "@heroicons/react/24/solid";
-
-import { InformationCircleIcon } from "@heroicons/react/24/outline";
 
 function StellarEarnDashboard() {
   const router = useRouter();
@@ -42,7 +27,6 @@ function StellarEarnDashboard() {
   const activeTab = (searchParams.get("tab") as Tab) || "all";
   const activeSkill = (searchParams.get("skill") as Skill) || "all";
 
-  const [activeGrantSkill, setActiveGrantSkill] = useState<string>("All");
   const [createdGigs, setCreatedGigs] = useState<Bounty[]>([]);
 
   useEffect(() => {

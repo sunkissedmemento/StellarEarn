@@ -12,11 +12,11 @@ import type { Bounty } from "@/lib/data";
 import { clearAuthSession, readAuthSession, writeAuthSession } from "@/lib/auth-session";
 
 export function Header() {
-  const [userId, setUserId] = useState<string | null>(null);
-  const [walletConnected, setWalletConnected] = useState(false);
-  const [username, setUsername] = useState<string | null>(null);
-  const [role, setRole] = useState<"earner" | "sponsor" | null>(null);
-  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(() => readAuthSession()?.userId ?? null);
+  const [walletConnected, setWalletConnected] = useState(() => Boolean(readAuthSession()?.walletConnected));
+  const [username, setUsername] = useState<string | null>(() => readAuthSession()?.username ?? null);
+  const [role, setRole] = useState<"earner" | "sponsor" | null>(() => readAuthSession()?.role ?? null);
+  const [walletAddress, setWalletAddress] = useState<string | null>(() => readAuthSession()?.walletAddress ?? null);
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<"signin" | "signup">("signin");
@@ -24,20 +24,12 @@ export function Header() {
 
   const [mounted, setMounted] = useState(false);
   const { setTheme, resolvedTheme } = useTheme();
+  const showAuthenticatedUi = mounted && (walletConnected || username);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setMounted(true);
     }, 0);
-
-    const session = readAuthSession();
-    if (session) {
-      setUserId(session.userId);
-      setWalletConnected(Boolean(session.walletConnected));
-      setUsername(session.username ?? null);
-      setRole(session.role ?? null);
-      setWalletAddress(session.walletAddress ?? null);
-    }
 
     const handleOpenAuth = (e: Event) => {
       const customEvent = e as CustomEvent<{ tab?: "signin" | "signup" }>;
@@ -179,7 +171,7 @@ export function Header() {
             Become a Sponsor <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
           </Button>
 
-          {walletConnected || username ? (
+          {showAuthenticatedUi ? (
             <>
               <div className="flex items-center gap-2 rounded-full border border-border bg-card pl-3.5 pr-2 py-0.5">
                 <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />

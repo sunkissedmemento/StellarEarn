@@ -95,7 +95,6 @@ export function mapGigToBounty(gig: GigRow): Bounty {
 export async function getGigBySlug(slug: string, type: OpportunityType): Promise<Bounty | null> {
   const supabase = createServerSupabaseClient();
   const query = supabase.from('gigs').select('*');
-  // @ts-expect-error Current generated Supabase type metadata in this workspace rejects valid literal column names.
   const { data, error } = await query.eq('slug', slug).eq('type', type).maybeSingle();
 
   if (error || !data) {

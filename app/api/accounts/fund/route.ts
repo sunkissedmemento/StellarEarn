@@ -15,7 +15,7 @@ export async function POST(req: Request) {
       return Response.json(
         {
           error: 'Validation failed',
-          details: parsed.error.errors.map((e) => ({
+          details: parsed.error.issues.map((e) => ({
             field: e.path.join('.'),
             message: e.message,
           })),

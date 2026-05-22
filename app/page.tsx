@@ -1,15 +1,14 @@
-"use client";
+﻿"use client";
 
-import { useState, useCallback, Suspense } from "react";
+import { useState, useCallback, Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
 
 import { BOUNTIES } from "@/lib/data";
-import type { Tab, Skill } from "@/lib/data";
+import type { Tab, Skill, Bounty } from "@/lib/data";
 import { BountyListItem } from "@/components/features/bounty-list-item";
 
 import {
@@ -17,7 +16,9 @@ import {
   getAddress,
 } from "@stellar/freighter-api";
 
-import { AdjustmentsHorizontalIcon } from "@heroicons/react/24/solid";
+import {
+  AdjustmentsHorizontalIcon
+} from "@heroicons/react/24/solid";
 
 function StellarEarnDashboard() {
   const router = useRouter();
@@ -25,6 +26,44 @@ function StellarEarnDashboard() {
 
   const activeTab = (searchParams.get("tab") as Tab) || "all";
   const activeSkill = (searchParams.get("skill") as Skill) || "all";
+
+  const [createdGigs, setCreatedGigs] = useState<Bounty[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadGigs = async () => {
+      try {
+        const response = await fetch("/api/gigs", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json()) as { gigs?: Bounty[] };
+        if (isMounted && Array.isArray(payload.gigs)) {
+          setCreatedGigs(payload.gigs);
+        }
+      } catch {
+        // Keep dashboard usable with static fallback data.
+      }
+    };
+
+    const handleGigCreated = (event: Event) => {
+      const customEvent = event as CustomEvent<Bounty>;
+      const gig = customEvent.detail;
+      if (!gig) return;
+
+      setCreatedGigs((prev) => {
+        const deduped = prev.filter((item) => item.id !== gig.id);
+        return [gig, ...deduped];
+      });
+    };
+
+    loadGigs();
+    window.addEventListener("gig-created", handleGigCreated);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener("gig-created", handleGigCreated);
+    };
+  }, []);
 
   /* =========================
      WALLET STATE (AUTH)
@@ -106,7 +145,9 @@ function StellarEarnDashboard() {
     );
   };
 
-  const filteredBounties = BOUNTIES.filter((b) => {
+  const allGigs = [...createdGigs, ...BOUNTIES];
+
+  const filteredBounties = allGigs.filter((b) => {
     const tabOk =
       activeTab === "all" ||
       (activeTab === "bounties" && b.type === "bounty") ||
@@ -125,7 +166,7 @@ function StellarEarnDashboard() {
     <div className="pb-20 backdrop-blur-[1px]">
 
       {/* HERO */}
-      <div className="relative flex min-h-[180px] items-center justify-between overflow-hidden bg-stellar-cosmic px-[8vw] py-8 rounded-2xl mb-6 border border-white/15 shadow-xl  mx-[1vw] my-[1vh] ">
+      <div className="relative flex min-h-[180px] items-center justify-between overflow-hidden bg-stellar-cosmic px-[8vw] py-8 rounded-2xl mb-6 border border-white/15 shadow-xl">
 
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80')] bg-cover bg-center opacity-50 mix-blend-overlay" />
 
@@ -143,9 +184,19 @@ function StellarEarnDashboard() {
 
             {/* SHOW ONLY IF NOT LOGGED IN */}
             {!isLoggedIn && (
-              <Button onClick={handleSignUpClick}>
-                Get Started
-              </Button>
+              <>
+                <Button onClick={handleSignUpClick}>
+                  Get Started
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className="border-white/30 text-white"
+                  onClick={handleSignUpClick}
+                >
+                  Login
+                </Button>
+              </>
             )}
 
             {/* WALLET CONNECT / IDENTITY */}
@@ -179,14 +230,10 @@ function StellarEarnDashboard() {
           <div className="mb-4 flex items-center gap-4">
             <span className="font-semibold">Browse Opportunities</span>
 
-            <Tabs value={activeTab} onValueChange={handleTabChange} className="w-fit">
-              <TabsList className="rounded-full bg-zinc-100 p-1 h-9 items-center dark:bg-zinc-900 flex gap-1">
+            <Tabs value={activeTab} onValueChange={handleTabChange}>
+              <TabsList>
                 {(["all", "bounties", "projects"] as const).map((t) => (
-                  <TabsTrigger
-                    key={t}
-                    value={t}
-                    className="rounded-full h-7 px-4 text-xs font-semibold capitalize data-active:bg-white data-active:text-zinc-900 dark:data-active:bg-zinc-800 dark:data-active:text-zinc-100 data-active:shadow-sm"
-                  >
+                  <TabsTrigger key={t} value={t}>
                     {t}
                   </TabsTrigger>
                 ))}
@@ -211,13 +258,7 @@ function StellarEarnDashboard() {
               <Badge
                 key={val}
                 onClick={() => handleSkillChange(val)}
-                variant={activeSkill === val ? "default" : "outline"}
-                className={cn(
-                  "cursor-pointer transition-all px-3 py-1 text-xs rounded-full border",
-                  activeSkill === val
-                    ? "bg-primary text-primary-foreground border-transparent shadow-sm"
-                    : "bg-transparent text-muted-foreground border-border hover:bg-muted/50 hover:text-foreground"
-                )}
+                className="cursor-pointer"
               >
                 {label}
               </Badge>

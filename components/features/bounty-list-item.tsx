@@ -8,6 +8,9 @@ interface BountyListItemProps {
 }
 
 export function BountyListItem({ bounty }: BountyListItemProps) {
+  const rewardAmount = bounty.rewardAmount ?? bounty.prize;
+  const rewardUnit = bounty.rewardUnit ?? "PHP";
+
   return (
     <Link
       href={bounty.type === "bounty" ? `/bounties/${bounty.slug}` : `/projects/${bounty.slug}`}
@@ -60,9 +63,9 @@ export function BountyListItem({ bounty }: BountyListItemProps) {
       <div className="relative z-10 flex shrink-0 items-center gap-1 bg-stellar-gray/10 dark:bg-stellar-gray/5 px-2.5 py-1 rounded-lg border border-stellar-gray/20 dark:border-stellar-gray/10 transition-all duration-200 group-hover:bg-stellar-teal/5 group-hover:border-stellar-teal/20 group-hover:text-stellar-teal shadow-xs">
         <CurrencyDollarIcon className="w-3.5 h-3.5 text-stellar-teal group-hover:scale-110 transition-transform duration-200" />
         <span className="text-[12.5px] font-bold text-stellar-black dark:text-stellar-white group-hover:text-stellar-teal transition-colors duration-200">
-          {bounty.prize.toLocaleString()}
+          {rewardAmount.toLocaleString()}
         </span>
-        <span className="text-[10px] text-stellar-black/50 dark:text-stellar-gray/70 group-hover:text-stellar-teal/80 transition-colors duration-200 font-bold">PHP</span>
+        <span className="text-[10px] text-stellar-black/50 dark:text-stellar-gray/70 group-hover:text-stellar-teal/80 transition-colors duration-200 font-bold">{rewardUnit}</span>
       </div>
     </Link>
   );

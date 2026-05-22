@@ -1,19 +1,24 @@
-// ─── Lifecycle Types ────────────────────────────────────────────────────────
+﻿export type Tab = "all" | "bounties" | "projects";
+export type Skill = "all" | "content" | "design" | "dev" | "research";
+export type OpportunityType = "bounty" | "project";
+export type OpportunitySkill = Exclude<Skill, "all">;
+
+export type PrizeToken = "PHP" | "USDC" | "XLM";
 
 export type BountyStatus =
   | "draft"
   | "open"
   | "under_review"
+  | "pending_review"
   | "closed"
-  | "cancelled";
+  | "cancelled"
+  | "paid";
 
 export type SubmissionStatus =
   | "pending"
   | "under_review"
   | "winner"
   | "not_selected";
-
-export type PrizeToken = "PHP" | "USDC" | "XLM";
 
 export interface Winner {
   walletAddress: string;
@@ -37,15 +42,45 @@ export interface Submission {
   submissionUrl: string;
   twitterUrl?: string;
   description: string;
-  submittedAt: string; // ISO date string
+  submittedAt: string;
   status: SubmissionStatus;
   txHash: string;
   entryFeeTxHash: string;
 }
 
-// ─── Bounties ────────────────────────────────────────────────────────────────
+export interface Bounty {
+  id: string | number;
+  slug: string;
+  title: string;
+  org: string;
+  initials: string;
+  bg: string;
+  color: string;
+  prize: number;
+  prizeUsdc?: number;
+  prizeToken?: PrizeToken;
+  type: OpportunityType;
+  skill: OpportunitySkill;
+  deadline: string;
+  due: string;
+  submissions: number;
+  fee: string;
+  createdByUserId?: string;
+  paidAt?: string | null;
+  paymentTxHash?: string | null;
+  sorobanBountyId?: string | null;
+  creationTxHash?: string | null;
+  rewardAmount?: number;
+  rewardUnit?: "XLM" | "PHP" | "USDC";
+  status?: BountyStatus;
+  featured: boolean;
+  live: boolean;
+  desc: string;
+  deliverables: string[];
+  winner?: Winner | null;
+}
 
-export const BOUNTIES = [
+export const BOUNTIES: Bounty[] = [
   {
     id: 1,
     slug: "build-soroban-token-swap",
@@ -55,9 +90,9 @@ export const BOUNTIES = [
     bg: "#00A7B51a",
     color: "#00A7B5",
     prize: 25000,
-    prizeToken: "PHP" as PrizeToken,
     prizeUsdc: 208,
-    type: "bounty" as const,
+    prizeToken: "PHP",
+    type: "bounty",
     skill: "dev",
     deadline: "Jun 1",
     due: "Due in 6d",
@@ -65,16 +100,16 @@ export const BOUNTIES = [
     fee: "2 XLM",
     featured: true,
     live: true,
-    status: "open" as BountyStatus,
+    status: "open",
     desc: "Build a clean UI for swapping Stellar assets via a deployed Soroban contract. Integrate Freighter wallet. Supports USDC, XLM, and PHP-anchor assets.",
     deliverables: [
       "Next.js or React app deployed to Vercel",
       "Freighter wallet connect + SEP-10 auth",
       "Live testnet contract calls",
       "Mobile-responsive UI",
-      "GitHub repo + recorded demo",
+      "GitHub repo + recorded demo"
     ],
-    winner: null,
+    winner: null
   },
   {
     id: 2,
@@ -85,9 +120,9 @@ export const BOUNTIES = [
     bg: "#B7ACE81a",
     color: "#B7ACE8",
     prize: 12000,
-    prizeToken: "PHP" as PrizeToken,
     prizeUsdc: 100,
-    type: "bounty" as const,
+    prizeToken: "PHP",
+    type: "bounty",
     skill: "design",
     deadline: "May 28",
     due: "Due in 1d",
@@ -95,15 +130,15 @@ export const BOUNTIES = [
     fee: "2 XLM",
     featured: true,
     live: false,
-    status: "under_review" as BountyStatus,
-    desc: "Design the onboarding experience for first-time contributors — wallet connect, profile setup, and first bounty discovery.",
+    status: "under_review",
+    desc: "Design the onboarding experience for first-time contributors - wallet connect, profile setup, and first bounty discovery.",
     deliverables: [
       "Figma file with full flow, min 8 screens",
       "Mobile + desktop variants",
       "Wallet connect states",
-      "Handoff-ready with component notes",
+      "Handoff-ready with component notes"
     ],
-    winner: null,
+    winner: null
   },
   {
     id: 3,
@@ -114,9 +149,9 @@ export const BOUNTIES = [
     bg: "#00A7B51a",
     color: "#00A7B5",
     prize: 6500,
-    prizeToken: "PHP" as PrizeToken,
     prizeUsdc: 54,
-    type: "bounty" as const,
+    prizeToken: "PHP",
+    type: "bounty",
     skill: "content",
     deadline: "May 20",
     due: "Ended",
@@ -124,13 +159,13 @@ export const BOUNTIES = [
     fee: "2 XLM",
     featured: false,
     live: false,
-    status: "closed" as BountyStatus,
+    status: "closed",
     desc: "Document the StellarEarn escrow contract for developers integrating with it. Cover all public functions, error codes, and JS SDK integration examples.",
     deliverables: [
       "README with full contract API docs",
       "Integration guide with JS examples",
       "Error handling reference",
-      "Deployed docs site",
+      "Deployed docs site"
     ],
     winner: {
       walletAddress: "GDRXE2BQUC3AZNPVFSCEZ76NJ3WWL25FYFK6IQJZFE3CEWHG4M7RU1ND",
@@ -138,10 +173,10 @@ export const BOUNTIES = [
       initials: "AL",
       color: "#00A7B5",
       prizeAmount: 6500,
-      prizeToken: "PHP" as PrizeToken,
+      prizeToken: "PHP",
       submissionUrl: "https://github.com/analim/soroban-escrow-docs",
-      txHash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-    } satisfies Winner,
+      txHash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+    }
   },
   {
     id: 4,
@@ -152,9 +187,9 @@ export const BOUNTIES = [
     bg: "#00A7B51a",
     color: "#00A7B5",
     prize: 18000,
-    prizeToken: "PHP" as PrizeToken,
     prizeUsdc: 150,
-    type: "project" as const,
+    prizeToken: "PHP",
+    type: "project",
     skill: "research",
     deadline: "Jun 15",
     due: "Due in 4d",
@@ -162,29 +197,29 @@ export const BOUNTIES = [
     fee: "2 XLM",
     featured: false,
     live: true,
-    status: "open" as BountyStatus,
+    status: "open",
     desc: "Map Stellar anchors operating in SEA supporting PHP, IDR, or MYR. Evaluate SEP compliance, fees, and UX.",
     deliverables: [
       "Min 5 anchors reviewed in depth",
       "SEP-6 / SEP-24 compliance matrix",
       "Fee comparison table",
       "Recommended shortlist",
-      "PDF + Notion deliverable",
+      "PDF + Notion deliverable"
     ],
-    winner: null,
+    winner: null
   },
   {
     id: 5,
     slug: "community-growth-lead",
-    title: "Community growth lead — Stellar PH",
+    title: "Community growth lead - Stellar PH",
     org: "Stellar SEA",
     initials: "SS",
     bg: "#B7ACE81a",
     color: "#B7ACE8",
     prize: 9000,
-    prizeToken: "PHP" as PrizeToken,
     prizeUsdc: 75,
-    type: "bounty" as const,
+    prizeToken: "PHP",
+    type: "bounty",
     skill: "content",
     deadline: "May 30",
     due: "Due in 4d",
@@ -192,15 +227,15 @@ export const BOUNTIES = [
     fee: "2 XLM",
     featured: false,
     live: true,
-    status: "open" as BountyStatus,
+    status: "open",
     desc: "Grow the Stellar Philippines community. Host 2 local events, produce 4 pieces of content, and onboard 50 new contributors.",
     deliverables: [
       "Evidence of 2 IRL events hosted",
       "4 published content pieces",
       "50 new signups via referral link",
-      "Monthly report",
+      "Monthly report"
     ],
-    winner: null,
+    winner: null
   },
   {
     id: 6,
@@ -211,9 +246,9 @@ export const BOUNTIES = [
     bg: "#00A7B51a",
     color: "#00A7B5",
     prize: 32000,
-    prizeToken: "PHP" as PrizeToken,
     prizeUsdc: 267,
-    type: "project" as const,
+    prizeToken: "PHP",
+    type: "project",
     skill: "dev",
     deadline: "Jun 20",
     due: "Due in 19d",
@@ -221,19 +256,17 @@ export const BOUNTIES = [
     fee: "2 XLM",
     featured: true,
     live: true,
-    status: "open" as BountyStatus,
+    status: "open",
     desc: "Build a React Native compatible adapter for Freighter wallet enabling mobile dApps to sign Stellar transactions.",
     deliverables: [
       "React Native package published to npm",
       "Works with Expo and bare RN",
       "Full test suite",
-      "Demo app",
+      "Demo app"
     ],
-    winner: null,
-  },
+    winner: null
+  }
 ];
-
-// ─── Mock Submissions ────────────────────────────────────────────────────────
 
 export const SUBMISSIONS: Submission[] = [
   {
@@ -252,7 +285,7 @@ export const SUBMISSIONS: Submission[] = [
     status: "pending",
     txHash: "f1e2d3c4b5a6f1e2d3c4b5a6f1e2d3c4b5a6f1e2d3c4b5a6f1e2d3c4b5a6f1e2",
     entryFeeTxHash:
-      "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
   },
   {
     id: "sub-002",
@@ -269,7 +302,7 @@ export const SUBMISSIONS: Submission[] = [
     status: "pending",
     txHash: "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
     entryFeeTxHash:
-      "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+      "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
   },
   {
     id: "sub-003",
@@ -286,7 +319,7 @@ export const SUBMISSIONS: Submission[] = [
     status: "under_review",
     txHash: "d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5",
     entryFeeTxHash:
-      "e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6",
+      "e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6"
   },
   {
     id: "sub-004",
@@ -303,27 +336,20 @@ export const SUBMISSIONS: Submission[] = [
     status: "winner",
     txHash: "f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1",
     entryFeeTxHash:
-      "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-  },
+      "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+  }
 ];
 
-// ─── "My" mock submissions (simulated logged-in user) ────────────────────────
-
-export const MY_SUBMISSIONS: Submission[] = [
-  SUBMISSIONS[0], // open bounty — pending
-  SUBMISSIONS[2], // under_review bounty — under_review
-];
-
-// ─── Grants ──────────────────────────────────────────────────────────────────
+export const MY_SUBMISSIONS: Submission[] = [SUBMISSIONS[0], SUBMISSIONS[2]];
 
 export const GRANTS = [
   {
     id: 1,
-    title: "Stellar SEA Ecosystem Grant — Wave 3",
+    title: "Stellar SEA Ecosystem Grant - Wave 3",
     org: "Stellar Foundation",
     initials: "SF",
     bg: "linear-gradient(135deg,#002E5D,#00A7B5)",
-    prize: "₱250,000",
+    prize: "PHP 250,000"
   },
   {
     id: 2,
@@ -331,7 +357,7 @@ export const GRANTS = [
     org: "StellarEarn",
     initials: "SE",
     bg: "linear-gradient(135deg,#00A7B5,#B7ACE8)",
-    prize: "Up to ₱50,000",
+    prize: "Up to PHP 50,000"
   },
   {
     id: 3,
@@ -339,118 +365,24 @@ export const GRANTS = [
     org: "Stellar SEA",
     initials: "SS",
     bg: "linear-gradient(135deg,#FDDA24,#00A7B5)",
-    prize: "Up to ₱100,000",
-  },
+    prize: "Up to PHP 100,000"
+  }
 ];
-
-// ─── Earners ─────────────────────────────────────────────────────────────────
 
 export const EARNERS = [
-  {
-    name: "Juan dela Cruz",
-    task: "Built Soroban escrow · StellarDAO",
-    prize: "25k",
-    token: "PHP",
-    initials: "JC",
-    color: "#00A7B5",
-  },
-  {
-    name: "Maria Santos",
-    task: "SEA Anchor Research · Stellar SEA",
-    prize: "18k",
-    token: "PHP",
-    initials: "MS",
-    color: "#00A7B5",
-  },
-  {
-    name: "Paolo Reyes",
-    task: "Onboarding design · StellarEarn",
-    prize: "12k",
-    token: "PHP",
-    initials: "PR",
-    color: "#B7ACE8",
-  },
-  {
-    name: "Ana Lim",
-    task: "Technical docs · StellarDAO",
-    prize: "6.5k",
-    token: "PHP",
-    initials: "AL",
-    color: "#00A7B5",
-  },
-  {
-    name: "Renz Bautista",
-    task: "Mobile wallet adapter · StellarDAO",
-    prize: "32k",
-    token: "PHP",
-    initials: "RB",
-    color: "#FDDA24",
-  },
-  {
-    name: "Kath Villanueva",
-    task: "Community growth · Stellar PH",
-    prize: "9k",
-    token: "PHP",
-    initials: "KV",
-    color: "#B7ACE8",
-  },
+  { name: "Juan dela Cruz", task: "Built Soroban escrow - StellarDAO", prize: "25k", token: "PHP", initials: "JC", color: "#00A7B5" },
+  { name: "Maria Santos", task: "SEA Anchor Research - Stellar SEA", prize: "18k", token: "PHP", initials: "MS", color: "#00A7B5" },
+  { name: "Paolo Reyes", task: "Onboarding design - StellarEarn", prize: "12k", token: "PHP", initials: "PR", color: "#B7ACE8" },
+  { name: "Ana Lim", task: "Technical docs - StellarDAO", prize: "6.5k", token: "PHP", initials: "AL", color: "#00A7B5" },
+  { name: "Renz Bautista", task: "Mobile wallet adapter - StellarDAO", prize: "32k", token: "PHP", initials: "RB", color: "#FDDA24" },
+  { name: "Kath Villanueva", task: "Community growth - Stellar PH", prize: "9k", token: "PHP", initials: "KV", color: "#B7ACE8" }
 ];
-
-// ─── Activities ───────────────────────────────────────────────────────────────
 
 export const ACTIVITIES = [
-  {
-    name: "Juan dela Cruz",
-    handle: "@juandc",
-    time: "2m",
-    action: "just submitted a bounty",
-    initials: "JC",
-    color: "#00A7B5",
-  },
-  {
-    name: "Maria Santos",
-    handle: "@mariasantos",
-    time: "15m",
-    action: "just submitted a bounty",
-    initials: "MS",
-    color: "#00A7B5",
-  },
-  {
-    name: "Paolo Reyes",
-    handle: "@preyes",
-    time: "33m",
-    action: "just submitted a bounty",
-    initials: "PR",
-    color: "#B7ACE8",
-  },
-  {
-    name: "Ana Lim",
-    handle: "@analim",
-    time: "1h",
-    action: "just submitted a bounty",
-    initials: "AL",
-    color: "#00A7B5",
-  },
-  {
-    name: "Renz Bautista",
-    handle: "@renzb",
-    time: "2h",
-    action: "just submitted a bounty",
-    initials: "RB",
-    color: "#FDDA24",
-  },
-  {
-    name: "Kath Villanueva",
-    handle: "@kathv",
-    time: "3h",
-    action: "just submitted a bounty",
-    initials: "KV",
-    color: "#B7ACE8",
-  },
+  { name: "Juan dela Cruz", handle: "@juandc", time: "2m", action: "just submitted a bounty", initials: "JC", color: "#00A7B5" },
+  { name: "Maria Santos", handle: "@mariasantos", time: "15m", action: "just submitted a bounty", initials: "MS", color: "#00A7B5" },
+  { name: "Paolo Reyes", handle: "@preyes", time: "33m", action: "just submitted a bounty", initials: "PR", color: "#B7ACE8" },
+  { name: "Ana Lim", handle: "@analim", time: "1h", action: "just submitted a bounty", initials: "AL", color: "#00A7B5" },
+  { name: "Renz Bautista", handle: "@renzb", time: "2h", action: "just submitted a bounty", initials: "RB", color: "#FDDA24" },
+  { name: "Kath Villanueva", handle: "@kathv", time: "3h", action: "just submitted a bounty", initials: "KV", color: "#B7ACE8" }
 ];
-
-// ─── Derived Types ────────────────────────────────────────────────────────────
-
-export type Bounty = (typeof BOUNTIES)[number];
-export type Tab = "all" | "bounties" | "projects";
-export type Skill = "all" | "content" | "design" | "dev" | "research";

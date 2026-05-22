@@ -8,22 +8,23 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { 
-  Wallet, 
-  Mail, 
-  Lock, 
-  User, 
-  Check, 
-  Loader2, 
-  ShieldCheck, 
-  UserSquare2, 
-  Building2 
+import { Keypair } from "@stellar/stellar-sdk";
+import {
+  Wallet,
+  Mail,
+  Lock,
+  User,
+  Check,
+  Loader2,
+  ShieldCheck,
+  UserSquare2,
+  Building2
 } from "lucide-react";
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAuthSuccess: (walletAddress?: string, username?: string, role?: "earner" | "sponsor") => void;
+  onAuthSuccess: (walletAddress?: string, username?: string, role?: "earner" | "sponsor", userId?: string) => void;
   defaultTab?: "signin" | "signup";
 }
 
@@ -34,10 +35,10 @@ export function AuthModal({
   defaultTab = "signin",
 }: AuthModalProps) {
   const [activeTab, setActiveTab] = useState<string>(defaultTab);
-  
+
   // Wallet state
   const [isWalletConnecting, setIsWalletConnecting] = useState(false);
-  
+
   // Sign In states
   const [signInEmail, setSignInEmail] = useState("");
   const [signInPassword, setSignInPassword] = useState("");
@@ -85,19 +86,48 @@ export function AuthModal({
     }
 
     setIsSignInLoading(true);
-    setTimeout(() => {
-      setIsSignInLoading(false);
-      const displayUsername = signInEmail.split("@")[0];
-      toast.success("Signed in successfully!", {
-        description: `Welcome back, ${displayUsername}`,
-      });
-      onAuthSuccess(undefined, displayUsername);
-      onClose();
-    }, 1200);
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: signInEmail,
+            password: signInPassword,
+          }),
+        });
+
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(data?.error || "Invalid credentials");
+        }
+
+        toast.success("Signed in successfully!", {
+          description: `Welcome back, ${data?.username ?? signInEmail.split("@")[0]}`,
+        });
+
+        onAuthSuccess(
+          data?.stellar_public_key ?? undefined,
+          data?.username ?? signInEmail.split("@")[0],
+          selectedRole,
+          data?.user_id
+        );
+        onClose();
+      } catch (error) {
+        toast.error("Sign in failed", {
+          description: error instanceof Error ? error.message : "Please try again.",
+        });
+      } finally {
+        setIsSignInLoading(false);
+      }
+    })();
   };
 
   // Sign Up
-  const handleSignUp = (e: React.FormEvent) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!signUpEmail || !signUpUsername || !signUpPassword) {
       toast.error("Please fill in all fields");
@@ -113,14 +143,46 @@ export function AuthModal({
     }
 
     setIsSignUpLoading(true);
-    setTimeout(() => {
-      setIsSignUpLoading(false);
+
+    try {
+      // Generate a valid Stellar keypair client-side and send only the public key.
+      const pair = Keypair.random();
+
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: signUpEmail,
+          username: signUpUsername,
+          stellar_public_key: pair.publicKey(),
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const message = data?.error || "Sign up failed";
+        const details = data?.details
+          ? ` (${Array.isArray(data.details) ? data.details.map((d: { message?: string }) => d.message).filter(Boolean).join(", ") : data.details})`
+          : "";
+        throw new Error(`${message}${details}`);
+      }
+
       toast.success("Account created successfully!", {
         description: `Welcome to StellarEarn, @${signUpUsername}!`,
       });
-      onAuthSuccess(undefined, signUpUsername, selectedRole);
+
+      onAuthSuccess(pair.publicKey(), signUpUsername, selectedRole, data?.user_id);
       onClose();
-    }, 1200);
+    } catch (error) {
+      toast.error("Sign up failed", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setIsSignUpLoading(false);
+    }
   };
 
   return (
@@ -149,14 +211,14 @@ export function AuthModal({
           className="mt-2 w-full"
         >
           <TabsList className="grid w-full grid-cols-2 rounded-full bg-zinc-100 p-1 h-9 items-center dark:bg-zinc-900">
-            <TabsTrigger 
-              value="signin" 
+            <TabsTrigger
+              value="signin"
               className="rounded-full h-7 text-xs font-semibold data-active:bg-white data-active:text-zinc-900 dark:data-active:bg-zinc-800 dark:data-active:text-zinc-100 data-active:shadow-sm"
             >
               Sign In
             </TabsTrigger>
-            <TabsTrigger 
-              value="signup" 
+            <TabsTrigger
+              value="signup"
               className="rounded-full h-7 text-xs font-semibold data-active:bg-white data-active:text-zinc-900 dark:data-active:bg-zinc-800 dark:data-active:text-zinc-100 data-active:shadow-sm"
             >
               Create Account

@@ -1,5 +1,4 @@
 import {
-  Account,
   Contract,
   rpc,
   Networks,
@@ -9,10 +8,6 @@ import {
 } from "@stellar/stellar-sdk";
 
 const DEFAULT_RPC_URL = "https://soroban-testnet.stellar.org";
-const READ_ONLY_ACCOUNT = new Account(
-  "GBZXN7PIRZGNMHGA6DK6MY6AC72O453END5TPHJUIXQ3OSBXUPJYNO3S",
-  "0"
-);
 
 function getNetworkPassphrase() {
   return process.env.NEXT_PUBLIC_STELLAR_NETWORK === "mainnet"
@@ -49,6 +44,13 @@ function toU64(value: number | bigint) {
 
 function toI128(value: string | number | bigint) {
   return nativeToScVal(BigInt(value), { type: "i128" });
+}
+
+function getReadOnlyAccountId() {
+  return (
+    process.env.STELLAR_READONLY_ACCOUNT_ID ||
+    process.env.NEXT_PUBLIC_STELLAR_READONLY_ACCOUNT_ID
+  );
 }
 
 export class BountyClient {
@@ -182,7 +184,16 @@ export class BountyClient {
   // READ ONLY (CORRECT WAY)
   // -------------------------
   async getBounty(id: number | bigint) {
-    const tx = new TransactionBuilder(READ_ONLY_ACCOUNT, {
+    const readOnlyAccountId = getReadOnlyAccountId();
+
+    if (!readOnlyAccountId) {
+      throw new Error(
+        "Read-only account ID is missing. Set STELLAR_READONLY_ACCOUNT_ID in your environment."
+      );
+    }
+
+    const sourceAccount = await this.server.getAccount(readOnlyAccountId);
+    const tx = new TransactionBuilder(sourceAccount, {
       fee: BASE_FEE,
       networkPassphrase: this.networkPassphrase,
     })
@@ -196,7 +207,16 @@ export class BountyClient {
   }
 
   async getSubmissions(id: number | bigint) {
-    const tx = new TransactionBuilder(READ_ONLY_ACCOUNT, {
+    const readOnlyAccountId = getReadOnlyAccountId();
+
+    if (!readOnlyAccountId) {
+      throw new Error(
+        "Read-only account ID is missing. Set STELLAR_READONLY_ACCOUNT_ID in your environment."
+      );
+    }
+
+    const sourceAccount = await this.server.getAccount(readOnlyAccountId);
+    const tx = new TransactionBuilder(sourceAccount, {
       fee: BASE_FEE,
       networkPassphrase: this.networkPassphrase,
     })
@@ -210,7 +230,16 @@ export class BountyClient {
   }
 
   async getFees() {
-    const tx = new TransactionBuilder(READ_ONLY_ACCOUNT, {
+    const readOnlyAccountId = getReadOnlyAccountId();
+
+    if (!readOnlyAccountId) {
+      throw new Error(
+        "Read-only account ID is missing. Set STELLAR_READONLY_ACCOUNT_ID in your environment."
+      );
+    }
+
+    const sourceAccount = await this.server.getAccount(readOnlyAccountId);
+    const tx = new TransactionBuilder(sourceAccount, {
       fee: BASE_FEE,
       networkPassphrase: this.networkPassphrase,
     })

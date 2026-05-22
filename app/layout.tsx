@@ -37,13 +37,16 @@ export default function RootLayout({
       className={`${workSans.variable} ${aleo.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <ThemeProvider
-        attribute="class"
-        defaultTheme="system"
-        enableSystem
-        disableTransitionOnChange
+      <body
+        className="relative flex min-h-full flex-col font-sans text-foreground bg-background"
+        suppressHydrationWarning
       >
-        <body className="relative flex min-h-full flex-col font-sans text-foreground bg-background">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
           {/* Ambient Glow Blobs & Noise Texture */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden -z-10 bg-stellar-noise-direct opacity-[0.012] bg-repeat" />
           <div className="pointer-events-none absolute inset-0 overflow-hidden -z-20">
@@ -58,8 +61,8 @@ export default function RootLayout({
           </main>
           <Footer />
           <Toaster />
-        </body>
-      </ThemeProvider>
+        </ThemeProvider>
+      </body>
     </html>
   );
 }

@@ -233,6 +233,9 @@ export type Database = {
           paid_by_user_id: string | null;
           paid_at: string | null;
           payment_tx_hash: string | null;
+          soroban_bounty_id: number | null;
+          creation_tx_hash: string | null;
+          creation_tx_xdr: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -266,6 +269,10 @@ export type Database = {
           worker_name: string | null;
           submission_url: string;
           status: 'pending_review' | 'approved' | 'rejected';
+          worker_stellar_public_key: string | null;
+          soroban_submission_hash: string | null;
+          submit_tx_hash: string | null;
+          submit_tx_xdr: string | null;
           submitted_at: string;
           approved_by_user_id: string | null;
           approved_at: string | null;

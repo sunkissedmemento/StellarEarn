@@ -23,6 +23,8 @@ type GigRow = {
   fee_xlm: number;
   paid_at: string | null;
   payment_tx_hash: string | null;
+  soroban_bounty_id: number | null;
+  creation_tx_hash: string | null;
   created_at: string;
 };
 
@@ -81,6 +83,8 @@ export function mapGigToBounty(gig: GigRow): Bounty {
     createdByUserId: gig.created_by_user_id,
     paidAt: gig.paid_at,
     paymentTxHash: gig.payment_tx_hash,
+    sorobanBountyId: gig.soroban_bounty_id !== null ? String(gig.soroban_bounty_id) : null,
+    creationTxHash: gig.creation_tx_hash,
     featured: gig.featured,
     live: gig.live,
     desc: gig.description,
@@ -90,14 +94,15 @@ export function mapGigToBounty(gig: GigRow): Bounty {
 
 export async function getGigBySlug(slug: string, type: OpportunityType): Promise<Bounty | null> {
   const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from('gigs')
-    .select('*')
-    .eq('slug', slug)
-    .eq('type', type)
-    .maybeSingle();
+  const query = supabase.from('gigs').select('*');
+  // @ts-expect-error Current generated Supabase type metadata in this workspace rejects valid literal column names.
+  const { data, error } = await query.eq('slug', slug).eq('type', type).maybeSingle();
 
   if (error || !data) {
+    return null;
+  }
+
+  if (typeof data !== 'object' || Array.isArray(data)) {
     return null;
   }
 
@@ -116,5 +121,9 @@ export async function listGigs(limit = 50): Promise<Bounty[]> {
     return [];
   }
 
-  return data.map((row) => mapGigToBounty(row as GigRow));
+  if (!Array.isArray(data)) {
+    return [];
+  }
+
+  return data.map((row) => mapGigToBounty(row as unknown as GigRow));
 }

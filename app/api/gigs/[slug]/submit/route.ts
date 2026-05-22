@@ -5,7 +5,11 @@ import { mapGigToBounty } from '@/lib/gigs';
 const SubmitWorkSchema = z.object({
   worker_user_id: z.string().uuid('worker_user_id must be a valid UUID'),
   worker_name: z.string().trim().min(2, 'Worker name is required').max(80).optional(),
+  worker_stellar_public_key: z.string().regex(/^G[A-Z2-7]{55}$/, 'Invalid Stellar public key').optional(),
   submission_url: z.string().url('Submission must be a valid URL'),
+  soroban_submission_hash: z.string().min(3).max(512).optional(),
+  submit_tx_hash: z.string().min(16).max(64).optional(),
+  submit_tx_xdr: z.string().min(24).optional(),
 });
 
 function isSupportedSubmissionLink(url: string): boolean {
@@ -81,7 +85,11 @@ export async function POST(
         gig_id: gig.id,
         worker_user_id: parsed.data.worker_user_id,
         worker_name: parsed.data.worker_name ?? null,
+        worker_stellar_public_key: parsed.data.worker_stellar_public_key ?? null,
         submission_url: parsed.data.submission_url,
+        soroban_submission_hash: parsed.data.soroban_submission_hash ?? null,
+        submit_tx_hash: parsed.data.submit_tx_hash ?? null,
+        submit_tx_xdr: parsed.data.submit_tx_xdr ?? null,
         status: 'pending_review',
       });
 

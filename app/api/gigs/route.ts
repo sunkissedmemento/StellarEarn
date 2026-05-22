@@ -16,6 +16,9 @@ const CreateGigSchema = z.object({
   deliverables: z.array(z.string().min(3, 'Deliverables must be meaningful')).min(1, 'At least one deliverable is required').max(8, 'Keep deliverables to 8 or fewer'),
   sponsor_name: z.string().max(60).optional(),
   sponsor_wallet: z.string().regex(/^G[A-Z2-7]{55}$/, 'Invalid Stellar public key').optional(),
+  soroban_bounty_id: z.number().int().nonnegative().optional(),
+  creation_tx_hash: z.string().min(16).max(64).optional(),
+  creation_tx_xdr: z.string().min(24).optional(),
 }).superRefine((value, ctx) => {
   if (value.reward_amount === undefined && value.prize === undefined) {
     ctx.addIssue({
@@ -79,6 +82,9 @@ export async function POST(req: Request) {
         deliverables: input.deliverables,
         sponsor_name: input.sponsor_name ?? null,
         sponsor_wallet: input.sponsor_wallet ?? null,
+        soroban_bounty_id: input.soroban_bounty_id ?? null,
+        creation_tx_hash: input.creation_tx_hash ?? null,
+        creation_tx_xdr: input.creation_tx_xdr ?? null,
       })
       .select('*')
       .single();

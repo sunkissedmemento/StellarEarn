@@ -21,6 +21,8 @@ export interface Bounty {
   createdByUserId?: string;
   paidAt?: string | null;
   paymentTxHash?: string | null;
+  sorobanBountyId?: string | null;
+  creationTxHash?: string | null;
   rewardAmount?: number;
   rewardUnit?: "XLM" | "PHP" | "USDC";
   status?: "open" | "pending_review" | "closed" | "paid";

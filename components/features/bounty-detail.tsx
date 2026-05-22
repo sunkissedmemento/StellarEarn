@@ -31,6 +31,40 @@ type GigSubmission = {
   payout_tx_hash: string | null;
 };
 
+function getApprovePayErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return "Please try again.";
+  }
+
+  const maybeHorizon = error as Error & {
+    response?: {
+      data?: {
+        type?: string;
+        detail?: string;
+        extras?: {
+          result_codes?: {
+            operations?: string[];
+          };
+        };
+      };
+    };
+  };
+
+  const horizonType = maybeHorizon.response?.data?.type ?? "";
+  const horizonDetail = maybeHorizon.response?.data?.detail ?? "";
+  const opCodes = maybeHorizon.response?.data?.extras?.result_codes?.operations ?? [];
+
+  if (horizonType.includes("not_found") || horizonDetail.includes("Resource Missing")) {
+    return "The sponsor wallet is not funded on testnet. Fund it with Friendbot, then retry.";
+  }
+
+  if (opCodes.includes("op_no_destination")) {
+    return "Worker wallet is not funded on testnet yet. Ask the worker to fund their address via Friendbot.";
+  }
+
+  return error.message || "Please try again.";
+}
+
 export function BountyDetail({ bounty }: BountyDetailProps) {
   const isHydrated = useSyncExternalStore(
     () => () => {},
@@ -197,6 +231,14 @@ export function BountyDetail({ bounty }: BountyDetailProps) {
         throw new Error("Freighter did not return a wallet address");
       }
 
+      if (!StellarSdk.StrKey.isValidEd25519PublicKey(signerAddress)) {
+        throw new Error("Freighter returned an invalid Stellar public key");
+      }
+
+      if (!StellarSdk.StrKey.isValidEd25519PublicKey(submission.worker_stellar_public_key)) {
+        throw new Error("Worker wallet address is invalid");
+      }
+
       const server = new StellarSdk.Horizon.Server(horizonUrl);
       const sourceAccount = await server.loadAccount(signerAddress);
 
@@ -256,7 +298,7 @@ export function BountyDetail({ bounty }: BountyDetailProps) {
       window.location.reload();
     } catch (error) {
       toast.error("Approve & Pay failed", {
-        description: error instanceof Error ? error.message : "Please try again.",
+        description: getApprovePayErrorMessage(error),
       });
     } finally {
       setIsApproving(null);
